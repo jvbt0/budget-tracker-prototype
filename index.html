@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Budget Tracker — Interactive Demo</title>
+<style>
+:root { --blue:#0040FF; --ink:#171717; --muted:#858585; --line:#d8d8d8; --red:#e53935; }
+* { box-sizing:border-box; }
+body { margin:0; background:#f5f5f5; color:var(--ink); font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; font-size:16px; }
+.shell { min-height:100vh; display:flex; justify-content:center; align-items:center; padding:24px; }
+.device { width:min(100%,420px); height:min(900px,calc(100vh - 48px)); min-height:700px; background:#fff; border:1px solid #e5e5e5; border-radius:24px; box-shadow:0 16px 48px rgba(0,0,0,.07); display:flex; flex-direction:column; overflow:hidden; position:relative; }
+.screen { flex:1; padding:117px 32px 0; overflow:auto; display:flex; flex-direction:column; }
+.screen.home { padding-left:28px; padding-right:28px; }
+.head { text-align:center; flex-shrink:0; }
+.fill { flex:1; min-height:20px; }
+.row { display:flex; align-items:center; width:100%; gap:0; min-height:20px; }
+.row .left { flex:1; min-width:0; text-align:left; }
+.row .right { width:110px; text-align:right; }
+.row .date { width:50px; text-align:left; color:var(--muted); }
+.row .desc { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-left:12px; }
+.row .price { width:85px; text-align:right; padding-left:8px; }
+button, input { font:inherit; color:inherit; }
+button { background:none; border:0; padding:0; cursor:pointer; }
+button.blue { color:var(--blue); }
+button.red { color:var(--red); }
+button:focus-visible, input:focus-visible { outline:1px solid var(--blue); outline-offset:3px; }
+input { border:0; outline:0; background:transparent; min-width:0; }
+input::placeholder { color:#999; opacity:1; }
+input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+input[type=number] { -moz-appearance:textfield; }
+.center-input { width:100%; text-align:center; }
+.stack { display:flex; flex-direction:column; gap:20px; }
+.list-stack { display:flex; flex-direction:column; gap:24px; }
+.expense-form { display:flex; flex-direction:column; align-items:center; gap:20px; }
+.category-list { display:flex; flex-direction:column; align-items:center; gap:16px; padding-top:4px; }
+.muted { color:var(--muted); }
+.rule { height:1px; background:#aaa; margin-top:4px; }
+.footer-controls { display:flex; align-items:center; justify-content:space-between; padding-top:16px; }
+.actions { display:flex; gap:16px; align-items:center; }
+.tabs { display:flex; justify-content:space-between; padding:0 39px 48px; align-items:center; flex-shrink:0; }
+.tab { width:48px; height:48px; display:grid; place-items:center; border:1px solid transparent; }
+.tab.active { border-color:#111; }
+.tab svg { width:20px; height:20px; stroke:currentColor; stroke-width:1.5; fill:none; }
+.tab:focus-visible { outline:1px solid var(--blue); }
+.amount-edit { width:110px; text-align:right; }
+.category-edit { flex:1; min-width:0; }
+.sorts { display:flex; justify-content:space-between; padding-bottom:28px; }
+.history-list { display:flex; flex-direction:column; gap:28px; }
+.item-date { color:var(--muted); }
+.income-row { display:flex; align-items:center; width:100%; gap:8px; }
+.income-name { white-space:nowrap; }
+.income-frequency { color:var(--muted); }
+.income-amount { margin-left:auto; text-align:right; width:110px; }
+.frequency { display:flex; justify-content:space-between; padding-top:10px; }
+.empty { text-align:center; }
+.reset { position:absolute; top:14px; right:16px; color:#aaa; font-size:11px; }
+@media (max-width:600px) { body{background:white;} .shell{padding:0;} .device{width:100%;height:100dvh;min-height:620px;border:0;border-radius:0;box-shadow:none;} .screen{padding-top:calc(117px + env(safe-area-inset-top));} .tabs{padding-bottom:calc(48px + env(safe-area-inset-bottom));} }
+</style>
+</head>
+<body>
+<div class="shell"><main class="device" id="app">
+<button class="reset" id="resetDemo" title="Reset demo data">reset demo</button>
+<div class="screen" id="screen"></div>
+<nav class="tabs" aria-label="Main navigation" id="tabs"></nav>
+</main></div>
+<script>
+const $ = (sel, root=document) => root.querySelector(sel);
+const money = n => '$' + (Number(n||0)).toFixed(2);
+const dateShort = d => { const dt=new Date(d); return dt.toLocaleDateString('en-US',{month:'2-digit',day:'2-digit'}); };
+const dateLabel = d => new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric'}).toUpperCase();
+const dateHeader = () => new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toUpperCase();
+const iso = d => { const dt=new Date(d); return new Date(dt.getTime()-dt.getTimezoneOffset()*60000).toISOString().slice(0,10); };function sampleData(){ const today=new Date(); const day=(offset)=>{let d=new Date(today); d.setDate(d.getDate()+offset); return iso(d);}; return {
+ expenses:[{id:1,amount:12.5,description:'coffee',date:day(0),category:'Dining'},{id:2,amount:38.24,description:'groceries',date:day(-1),category:'Groceries'},{id:3,amount:24,description:'lunch',date:day(-2),category:'Dining'},{id:4,amount:45,description:'gas',date:day(-3),category:'Gas'},{id:5,amount:19.99,description:'book',date:day(-5),category:'Shopping'}],
+ budgets:[{id:1,name:'Groceries',budget:300},{id:2,name:'Dining',budget:150},{id:3,name:'Gas',budget:100},{id:4,name:'Shopping',budget:100}],
+ incomes:[{id:1,name:'Salary',amount:3200,frequency:'monthly',date:day(0)},{id:2,name:'Other',amount:250,frequency:'monthly',date:day(0)}]}; }
+let state=sampleData(); let tab=0, addMode=false, editId=null, returnTab=0, amount='', description='', expenseCategory=null, chooseCategory=false, expenseDate=iso(new Date()), expandedBudget=null, editingBudgetId=null, addingBudget=false, editingBudgetCategories=false, newBudgetName='', editingIncomeId=null, editingIncomeFrequencyId=null, addingIncome=false, editingIncomeCategories=false, newIncomeName='', sortDateDesc=true, sortPriceDesc=true, sortByPrice=false;
+function persist(){ try{localStorage.setItem('budget-demo-data',JSON.stringify(state));}catch{} }
+function loadSaved(){try{const raw=localStorage.getItem('budget-demo-data'); if(raw) state=JSON.parse(raw);}catch{}}
+function totalIncome(){ const now=new Date(); return state.incomes.reduce((s,i)=>{ if(i.frequency==='once'){const d=new Date(i.date+'T12:00:00');return s+(d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth()?(i.amount||0):0);} return s+(i.amount||0)*(i.frequency==='weekly'?4:i.frequency==='biweekly'?2:1); },0); }
+function totalBudgets(){return state.budgets.reduce((s,b)=>s+(b.budget||0),0);}
+function balance(){let unc=state.expenses.filter(e=>!e.category && new Date(e.date).getMonth()===new Date().getMonth()).reduce((s,e)=>s+e.amount,0); return totalIncome()-totalBudgets()-unc;}
+function expenseRow(e){return `<button class="row" data-edit-exp="${e.id}" aria-label="Edit ${esc(e.description)}"><span class="date">${dateShort(e.date)}</span><span class="desc">${esc(e.description)}</span><span class="price">${money(e.amount)}</span></button>`;}
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function clearAdd(){addMode=false;editId=null;amount='';description='';expenseCategory=null;chooseCategory=false;expenseDate=iso(new Date());}
+function renderHome(){ if(addMode){return `<div class="head">${editId===null?'ADD EXPENSE':'EDIT EXPENSE'}</div><div class="fill"></div><div class="expense-form"><input class="center-input" id="amountInput" type="number" step="0.01" min="0" placeholder="$0.00" value="${esc(amount)}"/><input class="center-input" id="descriptionInput" placeholder="what was it?" value="${esc(description)}"/><button id="toggleCategory" class="${expenseCategory?'':'muted'}">${esc(expenseCategory||'category')}</button>${chooseCategory?`<div class="category-list">${state.budgets.length?state.budgets.map(b=>`<button data-pick-category="${esc(b.name)}" class="${expenseCategory===b.name?'blue':''}">${esc(b.name)}</button>`).join(''):'<span class="muted">No categories added</span>'}</div>`:''}<div id="dateSwipe" title="Swipe left/right to change day">${dateLabel(expenseDate)}</div>${editId===null?`<div class="actions"><button class="blue" id="saveExpense">save</button><button id="cancelExpense">cancel</button></div>`:`<div class="actions"><button class="blue" id="saveExpense">save</button><button id="cancelExpense">cancel</button><button class="red" id="deleteExpense">delete</button></div>`}</div><div class="fill"></div>`; }
+return `<div class="head">${dateHeader()}</div><div class="fill"></div><div class="stack empty"><div>${money(balance())}</div><div>available</div><button class="blue" id="addExpense">add +</button></div><div class="fill"></div>`; }
+function renderBudgets(){return `<div class="head">BUDGETS</div><div class="fill"></div><div class="list-stack">${state.budgets.map(b=>{let spent=state.expenses.filter(e=>e.category===b.name).reduce((s,e)=>s+e.amount,0), expanded=expandedBudget===b.name; return `<div><div class="row"><div class="left">${editingBudgetCategories?`<input class="category-edit" data-budget-name="${b.id}" value="${esc(b.name)}" placeholder="category">`:`<button class="left" data-expand-budget="${b.name}">${esc(b.name)}</button>`}</div>${editingBudgetCategories?`<button class="red" data-delete-budget="${b.id}">delete</button>`:editingBudgetId===b.id?`<input class="amount-edit" data-budget-amount="${b.id}" type="number" step="0.01" placeholder="$0.00" value="${b.budget??''}">`:`<button class="right" data-edit-budget="${b.id}">${b.budget===null?'$0.00':money(b.budget-spent)}</button>`}</div>${expanded&&!editingBudgetCategories?`<div class="stack" style="gap:16px;margin-top:20px">${state.expenses.filter(e=>e.category===b.name).sort((a,b)=>b.date.localeCompare(a.date)).length?state.expenses.filter(e=>e.category===b.name).sort((a,b)=>b.date.localeCompare(a.date)).map(expenseRow).join(''):'<span class="muted">No expenses yet</span>'}</div>`:''}</div>`;}).join('')}${state.budgets.length===0&&!addingBudget?`<div class="empty muted">No categories added</div>`:''}</div><div class="fill"></div><div class="rule"></div>${addingBudget?`<div class="stack" style="gap:12px;padding-top:14px"><input id="newBudgetName" placeholder="new category" value="${esc(newBudgetName)}"><div class="actions"><button class="blue" id="saveNewBudget">save</button><button id="cancelNewBudget">cancel</button></div></div>`:`<div class="footer-controls"><div class="actions"><button class="blue" id="addBudget">add +</button><button class="blue" id="editBudgets">edit</button></div><button class="${editingBudgetCategories?'blue':'muted'}" id="doneBudgets" ${editingBudgetCategories?'':'disabled'}>done</button></div>`}`;}
+function renderHistory(){if(!state.expenses.length)return `<div class="head">HISTORY</div><div class="fill"></div><div class="empty">No expenses yet</div><div class="fill"></div>`; const list=[...state.expenses].sort((a,b)=>sortByPrice?(sortPriceDesc?b.amount-a.amount:a.amount-b.amount):(sortDateDesc?b.date.localeCompare(a.date):a.date.localeCompare(b.date)));return `<div class="head">HISTORY</div><div class="fill" style="min-height:28px"></div><div class="sorts"><button class="blue" id="sortDates">${sortDateDesc?'new to old':'old to new'}</button><button class="blue" id="sortPrices">${sortPriceDesc?'high to low':'low to high'}</button></div><div class="history-list">${list.map(expenseRow).join('')}</div><div class="fill"></div>`;}
+function renderIncome(){return `<div class="head">INCOME</div><div class="fill"></div><div class="list-stack">${state.incomes.map(i=>`<div><div class="income-row">${editingIncomeCategories?`<input class="category-edit" data-income-name="${i.id}" value="${esc(i.name)}" placeholder="income"><button class="red" data-delete-income="${i.id}">delete</button>`:`<span class="income-name">${esc(i.name)}</span><span class="income-frequency">/ <button class="blue" data-frequency="${i.id}">${esc(i.frequency)}</button></span><span class="income-amount">${editingIncomeId===i.id?`<input class="amount-edit" data-income-amount="${i.id}" type="number" step="0.01" placeholder="$0.00" value="${i.amount??''}">`:`<button data-edit-income="${i.id}">${i.amount===null?'$0.00':money(i.amount)}</button>`}</span>`}</div>${editingIncomeFrequencyId===i.id?`<div class="frequency"><button data-set-frequency="${i.id}" data-freq="monthly" class="${i.frequency==='monthly'?'blue':''}">monthly</button><button data-set-frequency="${i.id}" data-freq="weekly" class="${i.frequency==='weekly'?'blue':''}">weekly</button><button data-set-frequency="${i.id}" data-freq="biweekly" class="${i.frequency==='biweekly'?'blue':''}">biweekly</button><button data-set-frequency="${i.id}" data-freq="once" class="${i.frequency==='once'?'blue':''}">once</button></div>${i.frequency==='once'?`<div style="text-align:center;padding-top:16px"><div class="once-date" data-once-date="${i.id}">${dateLabel(i.date)}</div></div>`:''}`:''}</div>`).join('')}${state.incomes.length===0&&!addingIncome?`<div class="empty muted">No income categories added</div>`:''}</div><div class="fill"></div><div class="rule"></div>${addingIncome?`<div class="stack" style="gap:12px;padding-top:14px"><input id="newIncomeName" placeholder="new income" value="${esc(newIncomeName)}"><div class="actions"><button class="blue" id="saveNewIncome">save</button><button id="cancelNewIncome">cancel</button></div></div>`:`<div class="footer-controls"><div class="actions"><button class="blue" id="addIncome">add +</button><button class="blue" id="editIncomes">edit</button></div><button class="${editingIncomeCategories||editingIncomeId!==null||editingIncomeFrequencyId!==null?'blue':'muted'}" id="doneIncomes" ${(editingIncomeCategories||editingIncomeId!==null||editingIncomeFrequencyId!==null)?'':'disabled'}>done</button></div>`}`;}
+const icons=[`<svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5M6 9.5V20h12V9.5M9.5 20v-6h5v6"/></svg>`,`<svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg>`,`<svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h.01M12 9h.01M16 9h.01M8 13h8M8 16h8"/></svg>`,`<svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14"/></svg>`];
+function render(){const screen=$('#screen'); screen.className='screen'+(tab===0?' home':''); screen.innerHTML=tab===0?renderHome():tab===1?renderBudgets():tab===2?renderHistory():renderIncome(); $('#tabs').innerHTML=icons.map((svg,i)=>`<button class="tab ${i===tab?'active':''}" data-tab="${i}" aria-label="${['Today','Budgets','History','Income'][i]}">${svg}</button>`).join(''); bind(); }
+function bind(){ $('#tabs').querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab=+b.dataset.tab; clearTransient();render();});
+ const bindClick=(id,fn)=>{const el=$(id);if(el)el.onclick=fn;};
+ bindClick('#addExpense',()=>{clearAdd();addMode=true;render();});
+ bindClick('#toggleCategory',()=>{chooseCategory=!chooseCategory;render();});
+ $('#screen').querySelectorAll('[data-pick-category]').forEach(b=>b.onclick=()=>{expenseCategory=b.dataset.pickCategory;chooseCategory=false;render();});
+ const amt=$('#amountInput'); if(amt)amt.oninput=()=>amount=amt.value;
+ const desc=$('#descriptionInput'); if(desc)desc.oninput=()=>description=desc.value;
+ bindClick('#dateSwipe',()=>{}); const dateNode=$('#dateSwipe'); if(dateNode){let x0=null;dateNode.onpointerdown=e=>x0=e.clientX;dateNode.onpointerup=e=>{if(x0!==null){const dx=e.clientX-x0;if(Math.abs(dx)>30){let d=new Date(expenseDate+'T12:00:00');d.setDate(d.getDate()+(dx<0?1:-1));expenseDate=iso(d);render();}x0=null;}};}
+ bindClick('#saveExpense',()=>{const val=parseFloat(amount);if(val>0){if(editId===null)state.expenses.unshift({id:Date.now(),amount:val,description,date:expenseDate,category:expenseCategory});else{let e=state.expenses.find(e=>e.id===editId);if(e)Object.assign(e,{amount:val,description,date:expenseDate,category:expenseCategory});}} persist();clearAdd();render();});
+ bindClick('#cancelExpense',()=>{const t=editId===null?tab:returnTab;clearAdd();tab=t;render();});
+ bindClick('#deleteExpense',()=>{state.expenses=state.expenses.filter(e=>e.id!==editId);persist();const t=returnTab;clearAdd();tab=t;render();});
+ $('#screen').querySelectorAll('[data-edit-exp]').forEach(b=>b.onclick=()=>{let e=state.expenses.find(e=>e.id==b.dataset.editExp);if(!e)return;returnTab=tab;tab=0;addMode=true;editId=e.id;amount=String(e.amount.toFixed(2));description=e.description;expenseCategory=e.category;expenseDate=e.date;chooseCategory=false;render();});
+ bindClick('#sortDates',()=>{sortByPrice=false;sortDateDesc=!sortDateDesc;render();}); bindClick('#sortPrices',()=>{sortByPrice=true;sortPriceDesc=!sortPriceDesc;render();});
+ $('#screen').querySelectorAll('[data-expand-budget]').forEach(b=>b.onclick=()=>{expandedBudget=expandedBudget===b.dataset.expandBudget?null:b.dataset.expandBudget;render();});
+ $('#screen').querySelectorAll('[data-edit-budget]').forEach(b=>b.onclick=()=>{editingBudgetId=+b.dataset.editBudget;render();let field=$(`[data-budget-amount="${b.dataset.editBudget}"]`);if(field){field.focus();field.oninput=()=>{let cat=state.budgets.find(c=>c.id==b.dataset.editBudget);if(cat)cat.budget=field.value===''?null:Number(field.value);persist();};field.onblur=()=>{editingBudgetId=null;render();};}});
+ $('#screen').querySelectorAll('[data-budget-name]').forEach(inp=>inp.oninput=()=>{let b=state.budgets.find(b=>b.id==inp.dataset.budgetName);if(b)b.name=inp.value;persist();});
+ $('#screen').querySelectorAll('[data-delete-budget]').forEach(b=>b.onclick=()=>{const nm=state.budgets.find(x=>x.id==b.dataset.deleteBudget)?.name;state.budgets=state.budgets.filter(x=>x.id!=b.dataset.deleteBudget);if(expandedBudget===nm)expandedBudget=null;persist();render();});
+ bindClick('#addBudget',()=>{addingBudget=true;newBudgetName='';render();}); bindClick('#editBudgets',()=>{editingBudgetCategories=true;render();}); bindClick('#doneBudgets',()=>{if(!state.budgets.some(b=>!b.name.trim())){editingBudgetCategories=false;render();}});
+ bindClick('#saveNewBudget',()=>{const n=newBudgetName.trim();if(n){state.budgets.push({id:Date.now(),name:n,budget:null});persist();}addingBudget=false;newBudgetName='';render();}); bindClick('#cancelNewBudget',()=>{addingBudget=false;newBudgetName='';render();}); const nb=$('#newBudgetName');if(nb)nb.oninput=()=>newBudgetName=nb.value;
+ $('#screen').querySelectorAll('[data-edit-income]').forEach(b=>b.onclick=()=>{editingIncomeId=+b.dataset.editIncome;render();const f=$(`[data-income-amount="${b.dataset.editIncome}"]`);if(f){f.focus();f.oninput=()=>{let inc=state.incomes.find(x=>x.id==b.dataset.editIncome);if(inc)inc.amount=f.value===''?null:Number(f.value);persist();};f.onblur=()=>{editingIncomeId=null;render();};}});
+ $('#screen').querySelectorAll('[data-frequency]').forEach(b=>b.onclick=()=>{editingIncomeId=null;editingIncomeFrequencyId=editingIncomeFrequencyId==b.dataset.frequency?null:+b.dataset.frequency;render();});
+ $('#screen').querySelectorAll('[data-set-frequency]').forEach(b=>b.onclick=()=>{let i=state.incomes.find(x=>x.id==b.dataset.setFrequency);if(i){i.frequency=b.dataset.freq;if(i.frequency!=='once')editingIncomeFrequencyId=null;persist();render();}});
+ $('#screen').querySelectorAll('[data-once-date]').forEach(b=>{let x0=null;b.onpointerdown=e=>x0=e.clientX;b.onpointerup=e=>{if(x0!==null){let dx=e.clientX-x0;if(Math.abs(dx)>30){let i=state.incomes.find(x=>x.id==b.dataset.onceDate);if(i){let d=new Date(i.date+'T12:00:00');d.setDate(d.getDate()+(dx<0?1:-1));i.date=iso(d);persist();render();}}x0=null;}};});
+ $('#screen').querySelectorAll('[data-income-name]').forEach(inp=>inp.oninput=()=>{let i=state.incomes.find(x=>x.id==inp.dataset.incomeName);if(i)i.name=inp.value;persist();}); $('#screen').querySelectorAll('[data-delete-income]').forEach(b=>b.onclick=()=>{state.incomes=state.incomes.filter(x=>x.id!=b.dataset.deleteIncome);persist();render();});
+ bindClick('#addIncome',()=>{addingIncome=true;newIncomeName='';render();});bindClick('#editIncomes',()=>{editingIncomeCategories=true;render();});bindClick('#doneIncomes',()=>{if(!state.incomes.some(i=>!i.name.trim())){editingIncomeCategories=false;editingIncomeId=null;editingIncomeFrequencyId=null;render();}});
+ bindClick('#saveNewIncome',()=>{const n=newIncomeName.trim();if(n){state.incomes.push({id:Date.now(),name:n,amount:null,frequency:'monthly',date:iso(new Date())});persist();}addingIncome=false;newIncomeName='';render();});bindClick('#cancelNewIncome',()=>{addingIncome=false;newIncomeName='';render();});const ni=$('#newIncomeName');if(ni)ni.oninput=()=>newIncomeName=ni.value;
+ $('#screen').querySelectorAll('[data-edit-income]').forEach(b=>b.onclick=()=>{});
+}
+function clearTransient(){addMode=false;editId=null;amount='';description='';expenseCategory=null;chooseCategory=false;editingBudgetId=null;editingIncomeId=null;editingIncomeFrequencyId=null;addingBudget=false;addingIncome=false;editingBudgetCategories=false;editingIncomeCategories=false;expandedBudget=null;}
+$('#resetDemo').onclick=()=>{state=sampleData();localStorage.removeItem('budget-demo-data');clearTransient();tab=0;render();};
+loadSaved(); render();
+</script>
+</body></html>
